@@ -1752,32 +1752,7 @@ handle_ar(X509_EXTENSION *ext, void *arg)
 static int
 handle_eku(X509_EXTENSION *ext, void *arg)
 {
-	EXTENDED_KEY_USAGE *eku;
-	int nid;
-	int error;
-
-	eku = X509V3_EXT_d2i(ext);
-	if (eku == NULL)
-		return cannot_decode(ext_eku());
-
-	/*
-	 * RFC 8209 allows multiple KeyPurposeId, so look only for the one
-	 * required and specified at section 3.1.3.2
-	 */
-	error = -ENOENT;
-	while (sk_ASN1_OBJECT_num(eku) > 0) {
-		nid = OBJ_obj2nid(sk_ASN1_OBJECT_pop(eku));
-		if (nid == nid_bgpsecRouter()) {
-			error = 0;
-			goto end;
-		}
-	}
-
-	if (error)
-		pr_val_err("Extended Key Usage doesn't include id-kp-bgpsec-router.");
-end:
-	EXTENDED_KEY_USAGE_free(eku);
-	return error;
+	return 0; /* Already handled at get_certificate_type(). */
 }
 
 /**
@@ -1918,16 +1893,56 @@ certificate_validate_extensions_ee(X509 *cert, OCTET_STRING_t *sid,
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
 
-static enum cert_type
-get_certificate_type(X509 *cert, bool is_ta)
+static bool
+has_bgpsec_router_eku(X509 *cert)
 {
-	if (is_ta)
-		return CERTYPE_TA;
-	if (X509_get_ext_by_NID(cert, ext_bc()->nid, -1) >= 0)
-		return CERTYPE_CA;
-	if (X509_get_ext_by_NID(cert, NID_ext_key_usage, -1) >= 0)
-		return CERTYPE_BGPSEC;
-	return CERTYPE_EE;
+	EXTENDED_KEY_USAGE *eku;
+	int i;
+	int nid;
+
+	eku = X509_get_ext_d2i(cert, NID_ext_key_usage, NULL, NULL);
+	if (eku == NULL)
+		return false;
+
+	/* RFC 8209#section-3.1.3.2: Unknown KeyPurposeIds are allowed. */
+	for (i = 0; i < sk_ASN1_OBJECT_num(eku); i++) {
+		nid = OBJ_obj2nid(sk_ASN1_OBJECT_value(eku, i));
+		if (nid == nid_bgpsecRouter()) {
+			EXTENDED_KEY_USAGE_free(eku);
+			return true;
+		}
+	}
+
+	EXTENDED_KEY_USAGE_free(eku);
+	return false;
+}
+
+/*
+ * Assumption: Meant to be used exclusively in the context of parsing a .cer
+ * certificate.
+ */
+static int
+get_certificate_type(X509 *cert, bool is_ta, enum cert_type *result)
+{
+	if (is_ta) {
+		/* Note: It looks weird if we log the type here. */
+		*result = CERTYPE_TA;
+		return 0;
+	}
+
+	if (X509_check_ca(cert) == 1) {
+		pr_val_debug("Type: CA");
+		*result = CERTYPE_CA;
+		return 0;
+	}
+
+	if (has_bgpsec_router_eku(cert)) {
+		pr_val_debug("Type: BGPsec EE");
+		*result = CERTYPE_BGPSEC;
+		return 0;
+	}
+
+	return pr_val_err("Certificate is not TA, CA nor BGPsec. Ignoring...");
 }
 
 /*
@@ -2472,20 +2487,12 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_cert;
 
-	certype = get_certificate_type(cert, rpp_parent == NULL);
-	switch (certype) {
-	case CERTYPE_TA:
-		break;
-	case CERTYPE_CA:
-		pr_val_debug("Type: CA");
-		break;
-	case CERTYPE_BGPSEC:
-		pr_val_debug("Type: BGPsec EE");
+	error = get_certificate_type(cert, rpp_parent == NULL, &certype);
+	if (error)
+		goto revert_cert;
+	if (certype == CERTYPE_BGPSEC) {
 		error = handle_bgpsec(cert, x509stack_peek_resources(
 		    validation_certstack(state)), rpp_parent);
-		goto revert_cert;
-	default:
-		pr_val_debug("Type: Unknown. Ignoring...");
 		goto revert_cert;
 	}
 
