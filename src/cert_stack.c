@@ -275,11 +275,10 @@ init_resources(X509 *x509, enum rpki_policy policy, enum cert_type type,
 	struct resources *result;
 	int error;
 
-	result = resources_create(false);
+	result = resources_create(policy, false);
 	if (result == NULL)
 		return pr_enomem();
 
-	resources_set_policy(result, policy);
 	error = certificate_get_resources(x509, result, type);
 	if (error)
 		goto fail;
@@ -291,7 +290,7 @@ init_resources(X509 *x509, enum rpki_policy policy, enum cert_type type,
 	 * The "It MUST NOT use the "inherit" form of the INR extension(s)"
 	 * part is already handled in certificate_get_resources().
 	 */
-	if (type == TA && resources_empty(result)) {
+	if (type == CERTYPE_TA && resources_empty(result)) {
 		error = pr_val_err("Trust Anchor certificate does not define any number resources.");
 		goto fail;
 	}

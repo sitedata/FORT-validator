@@ -58,7 +58,7 @@ validate_signedObject(struct certificate_refs *refs,
 
 /**
  * Ensures the @refs URIs match the parent Manifest's URIs. Assumes @refs came
- * from a CA certificate.
+ * from a (non-TA) CA certificate.
  *
  * @refs: References you want validated.
  * @pp: Repository Publication Point, as described by the parent Manifest.
@@ -67,9 +67,6 @@ int
 refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
 {
 	int error;
-
-	if (pp == NULL)
-		return 0; /* This CA is the TA, and therefore lacks a parent. */
 
 	error = validate_cdp(refs, pp);
 	if (error)
@@ -101,4 +98,20 @@ refs_validate_ee(struct certificate_refs *refs, struct rpp const *pp,
 		return error;
 
 	return validate_signedObject(refs, uri);
+}
+
+int
+refs_validate_bgp(struct certificate_refs *refs, struct rpp const *pp)
+{
+	int error;
+
+	error = validate_cdp(refs, pp);
+	if (error)
+		return error;
+
+	if (refs->signedObject != NULL)
+		pr_crit("BGPsec summary has a signedObject ('%s').",
+		    uri_op_get_printable(refs->signedObject));
+
+	return 0;
 }

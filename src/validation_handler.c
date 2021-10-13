@@ -54,8 +54,8 @@ vhandler_handle_roa_v6(uint32_t as, struct ipv6_prefix const *prefix,
 }
 
 int
-vhandler_handle_router_key(unsigned char const *ski, uint32_t as,
-    unsigned char const *spk)
+vhandler_handle_router_key(unsigned char const *ski,
+    struct asn_range const *asns, unsigned char const *spk)
 {
 	struct validation_handler const *handler;
 	int error;
@@ -65,6 +65,6 @@ vhandler_handle_router_key(unsigned char const *ski, uint32_t as,
 		return error;
 
 	return (handler->handle_router_key != NULL)
-	    ? handler->handle_router_key(ski, as, spk, handler->arg)
+	    ? handler->handle_router_key(ski, asns, spk, handler->arg)
 	    : 0;
 }

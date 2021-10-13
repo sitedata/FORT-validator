@@ -60,7 +60,7 @@ sarray_put(struct sorted_array *sarray)
 
 /* Does not check boundaries. */
 static void *
-get_nth_element(struct sorted_array *sarray, unsigned int index)
+get_nth_element(struct sorted_array const *sarray, unsigned int index)
 {
 	return ((char *)sarray->array) + index * sarray->size;
 }
@@ -71,7 +71,7 @@ get_nth_element(struct sorted_array *sarray, unsigned int index)
  * @array.)
  */
 static int
-compare(struct sorted_array *sarray, void *new)
+compare(struct sorted_array *sarray, void const *new)
 {
 	enum sarray_comparison cmp;
 
@@ -102,7 +102,7 @@ compare(struct sorted_array *sarray, void *new)
 }
 
 int
-sarray_add(struct sorted_array *sarray, void *element)
+sarray_add(struct sorted_array *sarray, void const *element)
 {
 	int error;
 	void *tmp;
@@ -125,13 +125,13 @@ sarray_add(struct sorted_array *sarray, void *element)
 }
 
 bool
-sarray_empty(struct sorted_array *sarray)
+sarray_empty(struct sorted_array const *sarray)
 {
 	return (sarray == NULL) || (sarray->count == 0);
 }
 
 bool
-sarray_contains(struct sorted_array *sarray, void *elem)
+sarray_contains(struct sorted_array const *sarray, void const *elem)
 {
 	unsigned int left, mid, right;
 	enum sarray_comparison cmp;
